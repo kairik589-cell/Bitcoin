@@ -5,7 +5,7 @@ from typing import List, Dict
 from .network import network_instance, Node
 from .models import (
     Block, Transaction, TransactionOutput, WalletCreateResponse,
-    TransactionCreateRequest, MineRequest, MultiSigWalletCreateRequest,
+    TransactionCreateRequest, MineRequest,
     TokenIssuanceRequest, TokenTransferRequest, TokenIssuanceTransaction,
     TokenTransferTransaction
 )
@@ -147,19 +147,6 @@ def create_wallet():
         public_key=crypto.serialize_public_key(public_key),
         address=address
     )
-
-# @app.post("/wallet/multisig/create", summary="Create a New Multi-Signature Wallet [DISABLED]")
-# def create_multisig_wallet(request: MultiSigWalletCreateRequest = Body(...)):
-#     """
-#     NOTE: This endpoint is disabled because the logic for SPENDING from a multi-sig
-#     address is not yet implemented. This serves as a placeholder for future development.
-#     """
-#     if request.required_signatures > len(request.public_keys_b64):
-#         raise HTTPException(status_code=400, detail="Required signatures cannot exceed the number of public keys.")
-
-#     address = crypto.generate_multisig_address(request.public_keys_b64, request.required_signatures)
-#     redeem_script = f"{request.required_signatures} {' '.join(request.public_keys_b64)}"
-#     return {"multisig_address": address, "redeem_script": redeem_script}
 
 # --- Token API Endpoints ---
 # (Simplified helper for fee payments, adapted for P2P)

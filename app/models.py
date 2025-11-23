@@ -48,14 +48,6 @@ class TransactionCreateRequest(BaseModel):
 class MineRequest(BaseModel):
     miner_address: str
 
-class MultiSigWalletCreateRequest(BaseModel):
-    public_keys_b64: List[str]
-    required_signatures: int
-
-class MultiSigWalletCreateResponse(BaseModel):
-    multisig_address: str
-    redeem_script: str
-
 # --- Custom Token Models ---
 
 class TokenTransaction(BaseModel):
