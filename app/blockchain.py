@@ -2,30 +2,47 @@ import time
 import hashlib
 from typing import Dict, List, Optional
 
-from .models import Block, BlockHeader, Transaction, TransactionInput, TransactionOutput
+from .models import (
+    Block, BlockHeader, Transaction, TransactionInput, TransactionOutput,
+    TokenIssuanceTransaction, TokenTransferTransaction
+)
 from . import crypto
 
-# --- Constants ---
+# --- Constants and Protocol Rules ---
 GENESIS_BLOCK_HASH = "0" * 64
-MINING_REWARD = 50.0
+INITIAL_MINING_REWARD = 50.0
+HALVING_INTERVAL = 10 # blocks
+
+def calculate_mining_reward(block_height: int) -> float:
+    """
+    Calculates the mining reward based on the block height,
+    simulating a halving event every HALVING_INTERVAL blocks.
+    """
+    halvings = block_height // HALVING_INTERVAL
+    return INITIAL_MINING_REWARD / (2 ** halvings)
 
 class Blockchain:
     def __init__(self):
         self.chain: List[Block] = []
-        # UTXO Set: A dictionary mapping "{tx_id}:{output_index}" to TransactionOutput
         self.utxo_set: Dict[str, TransactionOutput] = {}
-        # Mempool: Transactions waiting to be mined
         self.mempool: List[Transaction] = []
+        self.token_mempool: List = [] # Will hold TokenIssuanceTransaction or TokenTransferTransaction
 
-        # Create the genesis block
+        # --- Custom Token State ---
+        # Stores the definition of each token
+        self.token_definitions: Dict[str, dict] = {} # token_id -> {details}
+        # Stores the balance of each token for each user
+        self.token_balances: Dict[str, Dict[str, float]] = {} # user_address -> {token_id: balance}
+
         self._create_genesis_block()
 
     def _create_genesis_block(self):
         """Creates the very first block in the chain."""
+        reward = calculate_mining_reward(0)
         genesis_tx = Transaction(
             id="genesis_tx_0",
             inputs=[], # Coinbase transactions have no inputs
-            outputs=[TransactionOutput(value=MINING_REWARD, script_pub_key="genesis_lock")],
+            outputs=[TransactionOutput(value=reward, script_pub_key="genesis_lock")],
             locktime=0
         )
 
@@ -141,18 +158,37 @@ class Blockchain:
         # 3. Add the block to the chain
         self.chain.append(block)
 
-        # 4. Update the UTXO set
+        # 4. Update the UTXO set for native coin transactions
         for tx in block.transactions:
-            # Remove spent outputs from the UTXO set
             for tx_input in tx.inputs:
                 utxo_key = f"{tx_input.transaction_id}:{tx_input.output_index}"
-                if utxo_key in self.utxo_set:
-                    del self.utxo_set[utxo_key]
-
-            # Add new unspent outputs to the UTXO set
+                if utxo_key in self.utxo_set: del self.utxo_set[utxo_key]
             for i, tx_output in enumerate(tx.outputs):
-                utxo_key = f"{tx.id}:{i}"
-                self.utxo_set[utxo_key] = tx_output
+                self.utxo_set[f"{tx.id}:{i}"] = tx_output
+
+        # 5. Process token transactions from the token_mempool
+        for tx in self.token_mempool:
+            # Update UTXO set for fee payments
+            for fee_input in tx.fee_inputs:
+                utxo_key = f"{fee_input.transaction_id}:{fee_input.output_index}"
+                if utxo_key in self.utxo_set: del self.utxo_set[utxo_key]
+            for i, fee_output in enumerate(tx.fee_outputs):
+                self.utxo_set[f"{tx.id}:{i}"] = fee_output # Using token tx id for simplicity
+
+            # Update token state
+            if isinstance(tx, TokenIssuanceTransaction):
+                self.token_definitions[tx.token_id] = tx.dict(exclude={'id', 'fee_inputs', 'fee_outputs'})
+                self.token_balances[tx.issuer] = {tx.token_id: tx.total_supply}
+
+            elif isinstance(tx, TokenTransferTransaction):
+                # Debit sender
+                self.token_balances[tx.sender][tx.token_id] -= tx.amount
+                # Credit recipient
+                if tx.recipient not in self.token_balances: self.token_balances[tx.recipient] = {}
+                self.token_balances[tx.recipient][tx.token_id] = self.token_balances[tx.recipient].get(tx.token_id, 0) + tx.amount
+
+        # 6. Clear the token mempool
+        self.token_mempool.clear()
 
         return True
 
@@ -180,6 +216,46 @@ class Blockchain:
 
         return True
 
+    # --- Token Transaction Validation ---
+
+    def _validate_fee_payment(self, fee_inputs: List[TransactionInput], fee_outputs: List[TransactionOutput]) -> bool:
+        """Helper to validate the fee portion of a token transaction."""
+        total_input = sum(self.utxo_set[f"{i.transaction_id}:{i.output_index}"].value for i in fee_inputs)
+        total_output = sum(o.value for o in fee_outputs)
+        return total_input >= total_output # Fee is the difference
+
+    def validate_token_issuance(self, tx: TokenIssuanceTransaction) -> bool:
+        """Validates a new token issuance transaction."""
+        # 1. Check if token ID already exists
+        if tx.token_id in self.token_definitions:
+            return False
+        # 2. Validate the fee payment
+        if not self._validate_fee_payment(tx.fee_inputs, tx.fee_outputs):
+            return False
+        return True
+
+    def validate_token_transfer(self, tx: TokenTransferTransaction) -> bool:
+        """Validates a token transfer transaction."""
+        # 1. Check if token exists
+        if tx.token_id not in self.token_definitions:
+            return False
+        # 2. Check if sender has enough token balance
+        sender_balance = self.token_balances.get(tx.sender, {}).get(tx.token_id, 0)
+        if sender_balance < tx.amount:
+            return False
+        # 3. Validate the fee payment
+        if not self._validate_fee_payment(tx.fee_inputs, tx.fee_outputs):
+            return False
+        return True
+
+    def process_token_transactions(self, block: Block):
+        """Processes token transactions in a block to update state."""
+        # This is a conceptual simplification. We're assuming token tx are passed separately.
+        # A real implementation would embed them in the block's transaction list.
+
+        # In this simulation, we'll have to pass token tx to `add_block` separately.
+        # This is a limitation of not redesigning the Block model fundamentally.
+        pass # Logic will be handled in `add_block` for now.
 
 # A single, shared instance of the blockchain (in-memory database)
 blockchain_instance = Blockchain()

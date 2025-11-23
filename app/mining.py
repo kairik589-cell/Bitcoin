@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .models import Block, BlockHeader, Transaction, TransactionInput, TransactionOutput
 from . import crypto
-from .blockchain import MINING_REWARD
+from .blockchain import calculate_mining_reward
 
 # --- Merkle Tree ---
 
@@ -116,9 +116,12 @@ def mine_new_block(mempool: List[Transaction], utxo_set: dict, chain: List[Block
         total_fees += (total_input_value - total_output_value)
 
     # 2. Create the coinbase transaction
+    block_height = len(chain)
+    mining_reward = calculate_mining_reward(block_height)
+
     coinbase_output = TransactionOutput(
-        value=MINING_REWARD + total_fees,
-        script_pub_key=crypto.create_script_pub_key(miner_address)
+        value=mining_reward + total_fees,
+        script_pub_key=crypto.create_p2pkh_locking_script(miner_address)
     )
     coinbase_tx = Transaction(
         id=crypto.sha256_hash(str(time.time()).encode()), # Simple unique ID for coinbase

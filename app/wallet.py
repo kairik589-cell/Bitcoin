@@ -7,7 +7,10 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import base64
 
 def create_signed_transaction(
-    request: TransactionCreateRequest,
+    sender_private_key, # Can be b64 string or private_key object
+    recipient_address: str,
+    amount: float,
+    fee: float,
     sender_address: str,
     sender_utxos: Dict[str, TransactionOutput]
 ) -> Transaction:
@@ -19,7 +22,7 @@ def create_signed_transaction(
     # 1. Select UTXOs to cover the amount + fee
     utxos_to_spend: Dict[str, TransactionOutput] = {}
     total_input_value = 0
-    amount_to_send = request.amount + request.fee
+    amount_to_send = amount + fee
 
     for key, utxo in sender_utxos.items():
         utxos_to_spend[key] = utxo
@@ -33,8 +36,8 @@ def create_signed_transaction(
     # 2. Create the transaction outputs
     outputs = [
         TransactionOutput(
-            value=request.amount,
-            script_pub_key=crypto.create_script_pub_key(request.recipient_address)
+            value=amount,
+            script_pub_key=crypto.create_p2pkh_locking_script(recipient_address)
         )
     ]
 
@@ -44,7 +47,7 @@ def create_signed_transaction(
         outputs.append(
             TransactionOutput(
                 value=change,
-                script_pub_key=crypto.create_script_pub_key(sender_address)
+                script_pub_key=crypto.create_p2pkh_locking_script(sender_address)
             )
         )
 
@@ -65,15 +68,19 @@ def create_signed_transaction(
     tx_hash = crypto.sha256_hash(temp_tx.json(exclude={'id'}).encode())
 
     # 4. Sign the inputs
-    private_key_bytes = base64.b64decode(request.sender_private_key)
-    private_key = load_pem_private_key(private_key_bytes, password=None)
+    if isinstance(sender_private_key, str):
+        private_key_bytes = base64.b64decode(sender_private_key)
+        private_key = load_pem_private_key(private_key_bytes, password=None)
+    else:
+        private_key = sender_private_key # It's already a private_key object
+
     public_key = crypto.get_public_key(private_key)
     public_key_b64 = crypto.serialize_public_key(public_key)
 
     signature = crypto.sign_message(private_key, tx_hash.encode())
     signature_b64 = base64.b64encode(signature).decode('utf-8')
 
-    script_sig = crypto.create_script_sig(signature_b64, public_key_b64)
+    script_sig = crypto.create_p2pkh_unlocking_script(signature_b64, public_key_b64)
 
     # 5. Create the final, signed inputs
     signed_inputs = []

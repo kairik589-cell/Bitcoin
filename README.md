@@ -8,13 +8,15 @@ Selamat datang di Simulasi API Bitcoin! Proyek ini adalah implementasi *backend*
 
 ## 🏛️ Arsitektur & Desain
 
-Sistem Bitcoin asli bersifat terdesentralisasi, di mana banyak *node* (komputer) menyimpan salinan blockchain dan berkomunikasi dalam jaringan *peer-to-peer*. Namun, arsitektur semacam itu tidak cocok untuk lingkungan *serverless* seperti Vercel, yang tidak dirancang untuk menjalankan proses persisten.
+Sistem Bitcoin asli bersifat terdesentralisasi. Meskipun menjalankan jaringan *peer-to-peer* (P2P) yang sesungguhnya sulit di lingkungan *serverless* seperti Vercel, proyek ini mengambil langkah lebih jauh dari sekadar model terpusat sederhana.
 
-Untuk mengatasi ini, proyek kami mengadopsi **arsitektur terpusat**:
-- **Logika Blockchain sebagai API:** Semua logika inti (validasi transaksi, penambangan, manajemen rantai) diekspos melalui endpoint API.
-- **State dalam Memori:** Untuk saat ini, seluruh *state* blockchain (rantai blok, set UTXO, dan mempool) disimpan dalam satu objek di memori aplikasi. Ini membuatnya sangat cepat untuk pengembangan tetapi berarti data akan di-reset jika server di-restart.
+Arsitektur kami adalah **Simulasi Jaringan P2P Terdesentralisasi di Atas Server Tunggal**:
+- **Beberapa Node Virtual:** Aplikasi ini membuat beberapa objek `Node` dalam memori saat startup. Setiap `Node` memiliki instance `Blockchain`-nya sendiri, lengkap dengan rantai blok, set UTXO, dan mempool yang terpisah.
+- **Mekanisme Penyiaran (Broadcast):** Ketika API menerima transaksi atau blok baru, ia tidak memprosesnya secara langsung. Sebaliknya, ia "menyiarkannya" ke semua `Node` virtual di dalam `Network`.
+- **Konsensus Node Individual:** Setiap `Node` secara independen memvalidasi transaksi dan blok yang diterimanya. Saat menambang, sebuah *node* (dipilih secara acak) akan membangun blok di atas versi rantainya sendiri.
+- **API sebagai Gateway:** Endpoint API bertindak sebagai "gateway" ke jaringan yang disimulasikan ini. Endpoint *read-only* akan mengambil data dari *node* acak (mensimulasikan koneksi ke satu titik di jaringan), sementara endpoint *write* akan berinteraksi dengan seluruh jaringan.
 
-Pendekatan ini memungkinkan kita untuk mensimulasikan dan mempelajari hampir semua mekanisme fungsional Bitcoin (UTXO, kriptografi, Proof-of-Work) dalam lingkungan yang mudah di-deploy dan dikelola.
+Pendekatan ini memungkinkan kita untuk mensimulasikan dan mempelajari konsep-konsep desentralisasi yang kompleks—seperti penyiaran di jaringan, perbedaan *state* antar *node* (misalnya, mempool yang berbeda), dan persaingan antar penambang—dalam lingkungan tunggal yang dapat di-deploy.
 
 ---
 
