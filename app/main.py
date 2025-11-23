@@ -9,6 +9,7 @@ from .models import (
 from . import crypto
 from . import mining
 from . import wallet
+from .api_v1 import wallet as wallet_v1, exchange as exchange_v1
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import base64
 
@@ -120,7 +121,12 @@ def mine_block(request: MineRequest = Body(...)):
 
     mempool_to_mine = list(blockchain_instance.mempool)
 
-    new_block = mining.mine_new_block(mempool_to_mine, last_block, request.miner_address)
+    new_block = mining.mine_new_block(
+        mempool=mempool_to_mine,
+        utxo_set=blockchain_instance.utxo_set,
+        chain=blockchain_instance.chain,
+        miner_address=request.miner_address
+    )
 
     if blockchain_instance.add_block(new_block):
         # Clear the mempool of the mined transactions
@@ -141,6 +147,11 @@ def is_chain_valid():
     else:
         raise HTTPException(status_code=500, detail="The blockchain is invalid!")
 
+
+# --- Root Endpoint ---
+# --- API v1 Routers ---
+app.include_router(wallet_v1.router, prefix="/api/v1")
+app.include_router(exchange_v1.router, prefix="/api/v1")
 
 # --- Root Endpoint ---
 @app.get("/")

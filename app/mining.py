@@ -63,27 +63,57 @@ def find_nonce(header: BlockHeader) -> int:
         nonce += 1
 
 
-# --- Difficulty Adjustment (Placeholder) ---
+# --- Difficulty Adjustment ---
 
-def adjust_difficulty(last_block: Block, new_block_timestamp: float) -> int:
+DIFFICULTY_ADJUSTMENT_INTERVAL: int = 5  # blocks
+BLOCK_GENERATION_INTERVAL: int = 30     # seconds, target time per block
+EXPECTED_TIME_PER_INTERVAL = DIFFICULTY_ADJUSTMENT_INTERVAL * BLOCK_GENERATION_INTERVAL
+
+def adjust_difficulty(chain: List[Block]) -> int:
     """
-    Adjusts the mining difficulty.
-    For this simulation, we'll keep it simple and fixed for now.
-    A real implementation would adjust based on the time taken to mine previous blocks.
+    Adjusts the mining difficulty every `DIFFICULTY_ADJUSTMENT_INTERVAL` blocks.
+    If blocks are mined too fast, difficulty increases. If too slow, it decreases.
     """
-    # Placeholder: Fixed difficulty
-    return 4
+    last_block = chain[-1]
+    current_height = len(chain)
+
+    # Return the last block's difficulty if it's not time for an adjustment
+    if current_height % DIFFICULTY_ADJUSTMENT_INTERVAL != 0 or current_height == 0:
+        return last_block.header.difficulty_target
+
+    previous_adjustment_block = chain[current_height - DIFFICULTY_ADJUSTMENT_INTERVAL]
+    time_taken = last_block.header.timestamp - previous_adjustment_block.header.timestamp
+
+    # If mining was more than twice as fast as expected, increase difficulty
+    if time_taken < EXPECTED_TIME_PER_INTERVAL / 2:
+        return last_block.header.difficulty_target + 1
+    # If mining was more than twice as slow, decrease difficulty
+    elif time_taken > EXPECTED_TIME_PER_INTERVAL * 2:
+        return max(1, last_block.header.difficulty_target - 1)
+
+    return last_block.header.difficulty_target
+
 
 # --- Block Mining Orchestrator ---
 
-def mine_new_block(mempool: List[Transaction], last_block: Block, miner_address: str) -> Block:
+def mine_new_block(mempool: List[Transaction], utxo_set: dict, chain: List[Block], miner_address: str) -> Block:
     """
     Orchestrates the entire process of creating a new block.
     """
+    last_block = chain[-1]
     # 1. Calculate transaction fees
     total_fees = 0
-    # (A full implementation would require the Blockchain instance to calculate fees)
-    # For now, we'll assume fees are zero for simplicity.
+    for tx in mempool:
+        # Calculate the total value of inputs by looking up the UTXOs
+        total_input_value = sum(
+            utxo_set[f"{tx_input.transaction_id}:{tx_input.output_index}"].value
+            for tx_input in tx.inputs
+        )
+        # Calculate the total value of outputs
+        total_output_value = sum(tx_output.value for tx_output in tx.outputs)
+
+        # The fee is the difference
+        total_fees += (total_input_value - total_output_value)
 
     # 2. Create the coinbase transaction
     coinbase_output = TransactionOutput(
@@ -103,8 +133,8 @@ def mine_new_block(mempool: List[Transaction], last_block: Block, miner_address:
     merkle_root = calculate_merkle_root(transactions_for_block)
 
     # 5. Determine new difficulty
+    difficulty = adjust_difficulty(chain)
     new_timestamp = time.time()
-    difficulty = adjust_difficulty(last_block, new_timestamp)
 
     # 6. Create the block header
     new_header = BlockHeader(
