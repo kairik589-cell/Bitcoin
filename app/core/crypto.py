@@ -38,3 +38,34 @@ def create_p2pkh_locking_script(address: str) -> str:
 
 def create_p2pkh_unlocking_script(signature_b64: str, public_key_b64: str) -> str:
     return f"{signature_b64} {public_key_b64}"
+
+def evaluate_p2pkh_script(script_sig: str, script_pub_key: str, transaction_hash: str) -> bool:
+    """
+    Evaluates a P2PKH script by verifying the signature against the public key
+    and the public key against the address in the locking script.
+    """
+    try:
+        # 1. Parse the scripts
+        sig_b64, pub_key_b64 = script_sig.split()
+        script_type, address = script_pub_key.split()
+
+        if script_type != "P2PKH":
+            return False
+
+        # 2. Verify that the public key hashes to the address
+        public_key_bytes = base64.b64decode(pub_key_b64)
+        public_key = load_pem_public_key(public_key_bytes)
+
+        derived_address = generate_p2pkh_address(public_key)
+        if derived_address != address:
+            return False
+
+        # 3. Verify the signature
+        signature = base64.b64decode(sig_b64)
+        message = transaction_hash.encode('utf-8')
+
+        return verify_signature(public_key, signature, message)
+
+    except Exception:
+        # If any parsing or cryptographic operation fails, the script is invalid
+        return False

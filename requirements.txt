@@ -1,5 +1,9 @@
 fastapi
 uvicorn
+gunicorn
 cryptography
 pydantic
-pymongo[srv]
+pydantic-settings
+motor
+python-dotenv
+dnspython
