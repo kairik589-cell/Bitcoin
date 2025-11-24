@@ -2,3 +2,4 @@ fastapi
 uvicorn
 cryptography
 pydantic
+pymongo[srv]
